@@ -83,7 +83,6 @@ public class MainActivity extends ActionBarActivity implements DroneListener, Se
         if(AttributeEvent.STATE_CONNECTED.equals(event)){
             alertUser("Connected!");
             updateConnectedButton(true);
-            loadVehicleModes();
         }
         else if(AttributeEvent.STATE_DISCONNECTED.equals(event)){
             alertUser("Disconnected!");
@@ -95,8 +94,11 @@ public class MainActivity extends ActionBarActivity implements DroneListener, Se
             updateAltitude();
         } else if (AttributeEvent.SPEED_UPDATED.equals(event)) {
             updateSpeed();
-        } else {
+        } else if(AttributeEvent.HOME_UPDATED.equals(event)) {
             updateDistanceFromHome();
+        }
+        else if(AttributeEvent.STATE_VEHICLE_MODE.equals(event)){
+            loadVehicleModes();
         }
 
     }

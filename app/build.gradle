@@ -2,11 +2,11 @@ apply plugin: 'com.android.application'
 
 android {
     compileSdkVersion 21
-    buildToolsVersion "21.0.2"
+    buildToolsVersion "21.1.1"
 
     defaultConfig {
         applicationId "com.o3dr.hellodrone"
-        minSdkVersion 15
+        minSdkVersion 14
         targetSdkVersion 21
         versionCode 1
         versionName "1.0"
@@ -22,5 +22,5 @@ android {
 dependencies {
     compile fileTree(dir: 'libs', include: ['*.jar'])
     compile 'com.android.support:appcompat-v7:21.0.2'
-    compile 'com.o3dr:3dr-services-lib:2.1.+'
+    compile 'com.o3dr:3dr-services-lib:2.1.14'
 }
