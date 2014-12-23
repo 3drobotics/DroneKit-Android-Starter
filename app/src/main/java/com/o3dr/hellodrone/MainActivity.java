@@ -18,6 +18,7 @@ import com.o3dr.android.client.interfaces.DroneListener;
 import com.o3dr.android.client.interfaces.ServiceListener;
 import com.o3dr.services.android.lib.coordinate.LatLong;
 import com.o3dr.services.android.lib.coordinate.LatLongAlt;
+import com.o3dr.services.android.lib.drone.attribute.AttributeType;
 import com.o3dr.services.android.lib.drone.connection.ConnectionParameter;
 import com.o3dr.services.android.lib.drone.connection.ConnectionResult;
 
@@ -25,6 +26,10 @@ import com.o3dr.services.android.lib.drone.connection.ConnectionResult;
 import com.o3dr.services.android.lib.drone.attribute.AttributeEvent;
 import com.o3dr.services.android.lib.drone.connection.ConnectionType;
 import com.o3dr.services.android.lib.drone.connection.StreamRates;
+import com.o3dr.services.android.lib.drone.property.Altitude;
+import com.o3dr.services.android.lib.drone.property.Gps;
+import com.o3dr.services.android.lib.drone.property.Home;
+import com.o3dr.services.android.lib.drone.property.Speed;
 import com.o3dr.services.android.lib.drone.property.Type;
 import com.o3dr.services.android.lib.drone.property.VehicleMode;
 
@@ -93,7 +98,8 @@ public class MainActivity extends ActionBarActivity implements DroneListener, Se
                 break;
 
             case AttributeEvent.TYPE_UPDATED:
-                updateVehicleModesForType(this.drone.getType().getDroneType());
+                Type droneType = this.drone.getAttribute(AttributeType.TYPE);
+                updateVehicleModesForType(droneType.getDroneType());
                 break;
 
             case AttributeEvent.STATE_VEHICLE_MODE:
@@ -181,25 +187,31 @@ public class MainActivity extends ActionBarActivity implements DroneListener, Se
 
     protected void updateAltitude(){
         TextView altitudeTextView = (TextView)findViewById(R.id.altitudeValueTextView);
-        altitudeTextView.setText(String.format("%3.1f", this.drone.getAltitude().getAltitude()) + "m");
+        Altitude droneAltitude = this.drone.getAttribute(AttributeType.ALTITUDE);
+        altitudeTextView.setText(String.format("%3.1f", droneAltitude.getAltitude()) + "m");
     }
 
     protected void updateSpeed() {
         TextView speedTextView = (TextView)findViewById(R.id.speedValueTextView);
 
-        speedTextView.setText(String.format("%3.1f", this.drone.getSpeed().getGroundSpeed()) + "m");
+        Speed droneSpeed = this.drone.getAttribute(AttributeType.SPEED);
+        speedTextView.setText(String.format("%3.1f", droneSpeed.getGroundSpeed()) + "m");
     }
 
     protected void updateDistanceFromHome() {
         TextView distanceTextView = (TextView)findViewById(R.id.distanceValueTextView);
-        double vehicleAltitude = this.drone.getAltitude().getAltitude();
-        LatLong vehiclePosition = this.drone.getGps().getPosition();
+        Altitude droneAltitude = this.drone.getAttribute(AttributeType.ALTITUDE);
+        double vehicleAltitude = droneAltitude.getAltitude();
+
+        Gps droneGps = this.drone.getAttribute(AttributeType.GPS);
+        LatLong vehiclePosition = droneGps.getPosition();
 
         double distanceFromHome =  0;
 
-        if (this.drone.getGps().isValid()) {
+        if (droneGps.isValid()) {
             LatLongAlt vehicle3DPosition = new LatLongAlt(vehiclePosition.getLatitude(), vehiclePosition.getLongitude(), vehicleAltitude);
-            distanceFromHome = distanceBetweenPoints(this.drone.getHome().getCoordinate(), vehicle3DPosition);
+            Home droneHome = this.drone.getAttribute(AttributeType.HOME);
+            distanceFromHome = distanceBetweenPoints(droneHome.getCoordinate(), vehicle3DPosition);
         } else {
             distanceFromHome = 0;
         }
