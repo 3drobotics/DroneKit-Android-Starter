@@ -5,6 +5,7 @@ import android.support.v7.app.ActionBarActivity;
 import android.os.Bundle;
 import android.os.Handler;
 import android.util.Log;
+import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
 import android.widget.Button;
 import android.widget.Spinner;
@@ -22,7 +23,6 @@ import com.o3dr.services.android.lib.drone.attribute.AttributeType;
 import com.o3dr.services.android.lib.drone.connection.ConnectionParameter;
 import com.o3dr.services.android.lib.drone.connection.ConnectionResult;
 
-// Event not found
 import com.o3dr.services.android.lib.drone.attribute.AttributeEvent;
 import com.o3dr.services.android.lib.drone.connection.ConnectionType;
 import com.o3dr.services.android.lib.drone.connection.StreamRates;
@@ -30,6 +30,7 @@ import com.o3dr.services.android.lib.drone.property.Altitude;
 import com.o3dr.services.android.lib.drone.property.Gps;
 import com.o3dr.services.android.lib.drone.property.Home;
 import com.o3dr.services.android.lib.drone.property.Speed;
+import com.o3dr.services.android.lib.drone.property.State;
 import com.o3dr.services.android.lib.drone.property.Type;
 import com.o3dr.services.android.lib.drone.property.VehicleMode;
 
@@ -39,8 +40,14 @@ import java.util.List;
 public class MainActivity extends ActionBarActivity implements DroneListener, ServiceListener {
 
     private Drone drone;
+    private int droneType = Type.TYPE_UNKNOWN;
     private ServiceManager serviceManager;
     private final Handler handler = new Handler();
+
+    private final int DEFAULT_UDP_PORT = 14550;
+    private final int DEFAULT_USB_BAUD_RATE = 57600;
+
+    Spinner modeSelector;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -48,26 +55,43 @@ public class MainActivity extends ActionBarActivity implements DroneListener, Se
         setContentView(R.layout.activity_main);
 
         final Context context = getApplicationContext();
-        serviceManager = new ServiceManager(context);
-        drone = new Drone(serviceManager, handler);
+        this.serviceManager = new ServiceManager(context);
+        this.drone = new Drone(this.serviceManager, this.handler);
 
+        this.modeSelector = (Spinner)findViewById(R.id.modeSelect);
+        this.modeSelector.setOnItemSelectedListener(new Spinner.OnItemSelectedListener() {
+            @Override
+            public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
+                onFlightModeSelected(view);
+            }
+            @Override
+            public void onNothingSelected(AdapterView<?> parent) {
+                // Do nothing
+            }
+        });
     }
 
     @Override
     public void onStart() {
         super.onStart();
-        serviceManager.connect(this);
-        setupSubviews();
+        this.serviceManager.connect(this);
+        updateVehicleModesForType(this.droneType);
     }
 
     @Override
     public void onStop() {
         super.onStop();
+        if (this.drone.isConnected()) {
+            this.drone.disconnect();
+            updateConnectedButton(false);
+        }
         this.drone.destroy();
-        serviceManager.disconnect();
+        this.serviceManager.disconnect();
     }
 
-    // Service Manager
+    // 3DR Services Listener
+    // ==========================================================
+
     @Override
     public void onServiceConnected() {
         alertUser("3DR Services Connected");
@@ -80,8 +104,8 @@ public class MainActivity extends ActionBarActivity implements DroneListener, Se
         alertUser("3DR Service Interrupted");
     }
 
-
     // Drone Listener
+    // ==========================================================
 
     @Override
     public void onDroneEvent(String event, Bundle extras) {
@@ -90,6 +114,7 @@ public class MainActivity extends ActionBarActivity implements DroneListener, Se
             case AttributeEvent.STATE_CONNECTED:
                 alertUser("Drone Connected");
                 updateConnectedButton(this.drone.isConnected());
+
                 break;
 
             case AttributeEvent.STATE_DISCONNECTED:
@@ -97,18 +122,26 @@ public class MainActivity extends ActionBarActivity implements DroneListener, Se
                 updateConnectedButton(this.drone.isConnected());
                 break;
 
-            case AttributeEvent.TYPE_UPDATED:
-                Type droneType = this.drone.getAttribute(AttributeType.TYPE);
-                updateVehicleModesForType(droneType.getDroneType());
-                break;
-
-            case AttributeEvent.STATE_VEHICLE_MODE:
-
-                break;
-
             case AttributeEvent.STATE_UPDATED:
 
                 break;
+
+            case AttributeEvent.STATE_ARMING:
+
+                break;
+
+            case AttributeEvent.TYPE_UPDATED:
+                Type newDroneType = this.drone.getAttribute(AttributeType.TYPE);
+                if (newDroneType.getDroneType() != this.droneType) {
+                    this.droneType = newDroneType.getDroneType();
+                    updateVehicleModesForType(this.droneType);
+                }
+                break;
+
+            case AttributeEvent.STATE_VEHICLE_MODE:
+                updateVehicleMode();
+                break;
+
 
             case AttributeEvent.SPEED_UPDATED:
                 updateAltitude();
@@ -116,16 +149,16 @@ public class MainActivity extends ActionBarActivity implements DroneListener, Se
                 break;
 
             case AttributeEvent.HOME_UPDATED:
-
                 updateDistanceFromHome();
                 break;
 
-            default:
 
+
+            default:
+//                Log.i("DRONE_EVENT", event); //Uncomment to see events from the drone
                 break;
         }
 
-        Log.i("DRONE_EVENT", event);
     }
 
     @Override
@@ -133,15 +166,15 @@ public class MainActivity extends ActionBarActivity implements DroneListener, Se
         alertUser("Connection Failed:" + result.getErrorMessage());
     }
 
-
     @Override
     public void onDroneServiceInterrupted(String errorMsg) {
 
     }
 
     // UI Events
-    public void onBtnConnectTap(View view) {
+    // ==========================================================
 
+    public void onBtnConnectTap(View view) {
         if(this.drone.isConnected()) {
             this.drone.disconnect();
         } else {
@@ -160,9 +193,9 @@ public class MainActivity extends ActionBarActivity implements DroneListener, Se
 
             Bundle extraParams = new Bundle();
             if (selectedConnectionType == ConnectionType.TYPE_USB) {
-                extraParams.putInt(ConnectionType.EXTRA_USB_BAUD_RATE, 57600); // Set default baud rate to 57600
+                extraParams.putInt(ConnectionType.EXTRA_USB_BAUD_RATE, DEFAULT_USB_BAUD_RATE); // Set default baud rate to 57600
             } else {
-                extraParams.putInt(ConnectionType.EXTRA_UDP_SERVER_PORT, 14550); // Set default baud rate to 14550
+                extraParams.putInt(ConnectionType.EXTRA_UDP_SERVER_PORT, DEFAULT_UDP_PORT); // Set default baud rate to 14550
             }
             ConnectionParameter connectionParams = new ConnectionParameter(selectedConnectionType, extraParams, streamRates, null);
             this.drone.connect(connectionParams);
@@ -170,11 +203,13 @@ public class MainActivity extends ActionBarActivity implements DroneListener, Se
 
     }
 
-    public void onSelectFlightMode(View view) {
-
+    public void onFlightModeSelected(View view) {
+        VehicleMode vehicleMode = (VehicleMode) this.modeSelector.getSelectedItem();
+        this.drone.changeVehicleMode(vehicleMode);
     }
 
-    // UI update
+    // UI updating
+    // ==========================================================
 
     protected void updateConnectedButton(Boolean isConnected) {
         Button connectButton = (Button)findViewById(R.id.btnConnect);
@@ -193,16 +228,14 @@ public class MainActivity extends ActionBarActivity implements DroneListener, Se
 
     protected void updateSpeed() {
         TextView speedTextView = (TextView)findViewById(R.id.speedValueTextView);
-
         Speed droneSpeed = this.drone.getAttribute(AttributeType.SPEED);
-        speedTextView.setText(String.format("%3.1f", droneSpeed.getGroundSpeed()) + "m");
+        speedTextView.setText(String.format("%3.1f", droneSpeed.getGroundSpeed()) + "m/s");
     }
 
     protected void updateDistanceFromHome() {
         TextView distanceTextView = (TextView)findViewById(R.id.distanceValueTextView);
         Altitude droneAltitude = this.drone.getAttribute(AttributeType.ALTITUDE);
         double vehicleAltitude = droneAltitude.getAltitude();
-
         Gps droneGps = this.drone.getAttribute(AttributeType.GPS);
         LatLong vehiclePosition = droneGps.getPosition();
 
@@ -220,26 +253,22 @@ public class MainActivity extends ActionBarActivity implements DroneListener, Se
     }
 
     protected void updateVehicleModesForType(int droneType) {
-        Spinner modeSelector = (Spinner)findViewById(R.id.modeSelect);
-        modeSelector.setEnabled(true);
+
         List<VehicleMode> vehicleModes =  VehicleMode.getVehicleModePerDroneType(droneType);
-        ArrayAdapter<VehicleMode> arrayAdapter = new ArrayAdapter<VehicleMode>(this, android.R.layout.simple_spinner_item, vehicleModes);
-        arrayAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
-        modeSelector.setAdapter(arrayAdapter);
+        ArrayAdapter<VehicleMode> vehicleModeArrayAdapter = new ArrayAdapter<VehicleMode>(this, android.R.layout.simple_spinner_item, vehicleModes);
+        vehicleModeArrayAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
+        this.modeSelector.setAdapter(vehicleModeArrayAdapter);
     }
 
     protected void updateVehicleMode() {
-
+        State vehicleState = this.drone.getAttribute(AttributeType.STATE);
+        VehicleMode vehicleMode = vehicleState.getVehicleMode();
+        ArrayAdapter arrayAdapter = (ArrayAdapter)this.modeSelector.getAdapter();
+        this.modeSelector.setSelection(arrayAdapter.getPosition(vehicleMode));
     }
 
-    protected void setupSubviews() {
-        Spinner modeSelector = (Spinner)findViewById(R.id.modeSelect);
-        modeSelector.setEnabled(false);
-        updateVehicleModesForType(Type.TYPE_COPTER);
-    }
-
-
-    // Convenience methods
+    // Helper methods
+    // ==========================================================
 
     protected void alertUser(String message) {
         Toast.makeText(getApplicationContext(), message, Toast.LENGTH_LONG).show();
