@@ -114,20 +114,19 @@ public class MainActivity extends ActionBarActivity implements DroneListener, Se
             case AttributeEvent.STATE_CONNECTED:
                 alertUser("Drone Connected");
                 updateConnectedButton(this.drone.isConnected());
+                updateArmButton();
 
                 break;
 
             case AttributeEvent.STATE_DISCONNECTED:
                 alertUser("Drone Disconnected");
                 updateConnectedButton(this.drone.isConnected());
+                updateArmButton();
                 break;
 
             case AttributeEvent.STATE_UPDATED:
-
-                break;
-
             case AttributeEvent.STATE_ARMING:
-
+                updateArmButton();
                 break;
 
             case AttributeEvent.TYPE_UPDATED:
@@ -208,6 +207,25 @@ public class MainActivity extends ActionBarActivity implements DroneListener, Se
         this.drone.changeVehicleMode(vehicleMode);
     }
 
+    public void onArmButtonTap(View view) {
+        Button thisButton = (Button)view;
+        State vehicleState = this.drone.getAttribute(AttributeType.STATE);
+
+        if (vehicleState.isFlying()) {
+            // Land
+            this.drone.changeVehicleMode(VehicleMode.COPTER_LAND);
+        } else if (vehicleState.isArmed()) {
+            // Take off
+            this.drone.doGuidedTakeoff(10);
+        } else if (!vehicleState.isConnected()) {
+            // Connect
+            alertUser("Connect to a drone first");
+        } else if (vehicleState.isConnected() && !vehicleState.isArmed()){
+            // Connected but not Armed
+            this.drone.arm(true);
+        }
+    }
+
     // UI updating
     // ==========================================================
 
@@ -217,6 +235,28 @@ public class MainActivity extends ActionBarActivity implements DroneListener, Se
             connectButton.setText("Disconnect");
         } else {
             connectButton.setText("Connect");
+        }
+    }
+
+    protected void updateArmButton() {
+        State vehicleState = this.drone.getAttribute(AttributeType.STATE);
+        Button armButton = (Button)findViewById(R.id.btnArmTakeOff);
+
+        if (!this.drone.isConnected()) {
+            armButton.setVisibility(View.INVISIBLE);
+        } else {
+            armButton.setVisibility(View.VISIBLE);
+        }
+
+        if (vehicleState.isFlying()) {
+            // Land
+            armButton.setText("LAND");
+        } else if (vehicleState.isArmed()) {
+            // Take off
+            armButton.setText("TAKE OFF");
+        } else if (vehicleState.isConnected() && !vehicleState.isArmed()){
+            // Connected but not Armed
+            armButton.setText("ARM");
         }
     }
 
