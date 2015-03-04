@@ -4,7 +4,6 @@ import android.content.Context;
 import android.support.v7.app.ActionBarActivity;
 import android.os.Bundle;
 import android.os.Handler;
-import android.util.Log;
 import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
 import android.widget.Button;
@@ -13,10 +12,10 @@ import android.widget.TextView;
 import android.widget.Toast;
 import android.view.View;
 
+import com.o3dr.android.client.ControlTower;
 import com.o3dr.android.client.Drone;
-import com.o3dr.android.client.ServiceManager;
 import com.o3dr.android.client.interfaces.DroneListener;
-import com.o3dr.android.client.interfaces.ServiceListener;
+import com.o3dr.android.client.interfaces.TowerListener;
 import com.o3dr.services.android.lib.coordinate.LatLong;
 import com.o3dr.services.android.lib.coordinate.LatLongAlt;
 import com.o3dr.services.android.lib.drone.attribute.AttributeType;
@@ -25,7 +24,6 @@ import com.o3dr.services.android.lib.drone.connection.ConnectionResult;
 
 import com.o3dr.services.android.lib.drone.attribute.AttributeEvent;
 import com.o3dr.services.android.lib.drone.connection.ConnectionType;
-import com.o3dr.services.android.lib.drone.connection.StreamRates;
 import com.o3dr.services.android.lib.drone.property.Altitude;
 import com.o3dr.services.android.lib.drone.property.Gps;
 import com.o3dr.services.android.lib.drone.property.Home;
@@ -37,11 +35,11 @@ import com.o3dr.services.android.lib.drone.property.VehicleMode;
 import java.util.List;
 
 
-public class MainActivity extends ActionBarActivity implements DroneListener, ServiceListener {
+public class MainActivity extends ActionBarActivity implements DroneListener, TowerListener {
 
     private Drone drone;
     private int droneType = Type.TYPE_UNKNOWN;
-    private ServiceManager serviceManager;
+    private ControlTower controlTower;
     private final Handler handler = new Handler();
 
     private final int DEFAULT_UDP_PORT = 14550;
@@ -55,8 +53,8 @@ public class MainActivity extends ActionBarActivity implements DroneListener, Se
         setContentView(R.layout.activity_main);
 
         final Context context = getApplicationContext();
-        this.serviceManager = new ServiceManager(context);
-        this.drone = new Drone(this.serviceManager, this.handler);
+        this.controlTower = new ControlTower(context);
+        this.drone = new Drone();
 
         this.modeSelector = (Spinner)findViewById(R.id.modeSelect);
         this.modeSelector.setOnItemSelectedListener(new Spinner.OnItemSelectedListener() {
@@ -74,7 +72,7 @@ public class MainActivity extends ActionBarActivity implements DroneListener, Se
     @Override
     public void onStart() {
         super.onStart();
-        this.serviceManager.connect(this);
+        this.controlTower.connect(this);
         updateVehicleModesForType(this.droneType);
     }
 
@@ -85,22 +83,22 @@ public class MainActivity extends ActionBarActivity implements DroneListener, Se
             this.drone.disconnect();
             updateConnectedButton(false);
         }
-        this.drone.destroy();
-        this.serviceManager.disconnect();
+        this.controlTower.unregisterDrone(this.drone);
+        this.controlTower.disconnect();
     }
 
     // 3DR Services Listener
     // ==========================================================
 
     @Override
-    public void onServiceConnected() {
+    public void onTowerConnected() {
         alertUser("3DR Services Connected");
-        this.drone.start();
+        this.controlTower.registerDrone(this.drone, this.handler);
         this.drone.registerDroneListener(this);
     }
 
     @Override
-    public void onServiceInterrupted() {
+    public void onTowerDisconnected() {
         alertUser("3DR Service Interrupted");
     }
 
@@ -180,23 +178,13 @@ public class MainActivity extends ActionBarActivity implements DroneListener, Se
             Spinner connectionSelector = (Spinner)findViewById(R.id.selectConnectionType);
             int selectedConnectionType = connectionSelector.getSelectedItemPosition();
 
-            final StreamRates streamRates = new StreamRates();
-            streamRates.setExtendedStatus(2);
-            streamRates.setExtra1(2);
-            streamRates.setExtra2(2);
-            streamRates.setExtra3(2);
-            streamRates.setPosition(2);
-            streamRates.setRcChannels(2);
-            streamRates.setRawSensors(2);
-            streamRates.setRawController(2);
-
             Bundle extraParams = new Bundle();
             if (selectedConnectionType == ConnectionType.TYPE_USB) {
                 extraParams.putInt(ConnectionType.EXTRA_USB_BAUD_RATE, DEFAULT_USB_BAUD_RATE); // Set default baud rate to 57600
             } else {
                 extraParams.putInt(ConnectionType.EXTRA_UDP_SERVER_PORT, DEFAULT_UDP_PORT); // Set default baud rate to 14550
             }
-            ConnectionParameter connectionParams = new ConnectionParameter(selectedConnectionType, extraParams, streamRates, null);
+            ConnectionParameter connectionParams = new ConnectionParameter(selectedConnectionType, extraParams, null);
             this.drone.connect(connectionParams);
         }
 
@@ -254,7 +242,7 @@ public class MainActivity extends ActionBarActivity implements DroneListener, Se
         } else if (vehicleState.isArmed()) {
             // Take off
             armButton.setText("TAKE OFF");
-        } else if (vehicleState.isConnected() && !vehicleState.isArmed()){
+        } else if (vehicleState.isConnected()){
             // Connected but not Armed
             armButton.setText("ARM");
         }
