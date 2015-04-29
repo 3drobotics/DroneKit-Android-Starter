@@ -22,5 +22,5 @@ android {
 dependencies {
     compile fileTree(dir: 'libs', include: ['*.jar'])
     compile 'com.android.support:appcompat-v7:21.0.3'
-    compile 'com.o3dr:3dr-services-lib:2.2.6'
+    compile 'com.o3dr.android:dronekit-android:2.3.+'
 }

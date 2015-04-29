@@ -141,8 +141,11 @@ public class MainActivity extends ActionBarActivity implements DroneListener, To
 
 
             case AttributeEvent.SPEED_UPDATED:
-                updateAltitude();
                 updateSpeed();
+                break;
+
+            case AttributeEvent.ALTITUDE_UPDATED:
+                updateAltitude();
                 break;
 
             case AttributeEvent.HOME_UPDATED:
@@ -208,7 +211,7 @@ public class MainActivity extends ActionBarActivity implements DroneListener, To
         } else if (!vehicleState.isConnected()) {
             // Connect
             alertUser("Connect to a drone first");
-        } else if (vehicleState.isConnected() && !vehicleState.isArmed()){
+        } else {
             // Connected but not Armed
             this.drone.arm(true);
         }
