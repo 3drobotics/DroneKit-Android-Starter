@@ -1,4 +1,4 @@
 DroneKit-Android-Starter
 ========================
 
-Hello World app for Android Drone API.
+Hello World app for DroneKit-Android.
