@@ -4,6 +4,7 @@ import android.content.Context;
 import android.support.v7.app.ActionBarActivity;
 import android.os.Bundle;
 import android.os.Handler;
+import android.util.Log;
 import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
 import android.widget.Button;
@@ -14,6 +15,7 @@ import android.view.View;
 
 import com.o3dr.android.client.ControlTower;
 import com.o3dr.android.client.Drone;
+import com.o3dr.android.client.apis.VehicleApi;
 import com.o3dr.android.client.interfaces.DroneListener;
 import com.o3dr.android.client.interfaces.TowerListener;
 import com.o3dr.services.android.lib.coordinate.LatLong;
@@ -31,19 +33,23 @@ import com.o3dr.services.android.lib.drone.property.Speed;
 import com.o3dr.services.android.lib.drone.property.State;
 import com.o3dr.services.android.lib.drone.property.Type;
 import com.o3dr.services.android.lib.drone.property.VehicleMode;
+import com.o3dr.services.android.lib.model.AbstractCommandListener;
+import com.o3dr.services.android.lib.model.SimpleCommandListener;
 
 import java.util.List;
 
 
 public class MainActivity extends ActionBarActivity implements DroneListener, TowerListener {
 
+    private static final String TAG = MainActivity.class.getSimpleName();
+
     private Drone drone;
     private int droneType = Type.TYPE_UNKNOWN;
     private ControlTower controlTower;
     private final Handler handler = new Handler();
 
-    private final int DEFAULT_UDP_PORT = 14550;
-    private final int DEFAULT_USB_BAUD_RATE = 57600;
+    private static final int DEFAULT_UDP_PORT = 14550;
+    private static final int DEFAULT_USB_BAUD_RATE = 57600;
 
     Spinner modeSelector;
 
@@ -54,7 +60,7 @@ public class MainActivity extends ActionBarActivity implements DroneListener, To
 
         final Context context = getApplicationContext();
         this.controlTower = new ControlTower(context);
-        this.drone = new Drone();
+        this.drone = new Drone(context);
 
         this.modeSelector = (Spinner)findViewById(R.id.modeSelect);
         this.modeSelector.setOnItemSelectedListener(new Spinner.OnItemSelectedListener() {
@@ -62,6 +68,7 @@ public class MainActivity extends ActionBarActivity implements DroneListener, To
             public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
                 onFlightModeSelected(view);
             }
+
             @Override
             public void onNothingSelected(AdapterView<?> parent) {
                 // Do nothing
@@ -83,6 +90,7 @@ public class MainActivity extends ActionBarActivity implements DroneListener, To
             this.drone.disconnect();
             updateConnectedButton(false);
         }
+
         this.controlTower.unregisterDrone(this.drone);
         this.controlTower.disconnect();
     }
@@ -113,7 +121,6 @@ public class MainActivity extends ActionBarActivity implements DroneListener, To
                 alertUser("Drone Connected");
                 updateConnectedButton(this.drone.isConnected());
                 updateArmButton();
-
                 break;
 
             case AttributeEvent.STATE_DISCONNECTED:
@@ -138,7 +145,6 @@ public class MainActivity extends ActionBarActivity implements DroneListener, To
             case AttributeEvent.STATE_VEHICLE_MODE:
                 updateVehicleMode();
                 break;
-
 
             case AttributeEvent.SPEED_UPDATED:
                 updateSpeed();
@@ -177,7 +183,8 @@ public class MainActivity extends ActionBarActivity implements DroneListener, To
     public void onBtnConnectTap(View view) {
         if(this.drone.isConnected()) {
             this.drone.disconnect();
-        } else {
+        }
+        else {
             Spinner connectionSelector = (Spinner)findViewById(R.id.selectConnectionType);
             int selectedConnectionType = connectionSelector.getSelectedItemPosition();
 
@@ -187,6 +194,7 @@ public class MainActivity extends ActionBarActivity implements DroneListener, To
             } else {
                 extraParams.putInt(ConnectionType.EXTRA_UDP_SERVER_PORT, DEFAULT_UDP_PORT); // Set default baud rate to 14550
             }
+
             ConnectionParameter connectionParams = new ConnectionParameter(selectedConnectionType, extraParams, null);
             this.drone.connect(connectionParams);
         }
@@ -195,25 +203,76 @@ public class MainActivity extends ActionBarActivity implements DroneListener, To
 
     public void onFlightModeSelected(View view) {
         VehicleMode vehicleMode = (VehicleMode) this.modeSelector.getSelectedItem();
-        this.drone.changeVehicleMode(vehicleMode);
+
+        VehicleApi.getApi(this.drone).setVehicleMode(vehicleMode, new AbstractCommandListener() {
+            @Override
+            public void onSuccess() {
+                alertUser("Vehicle mode change successful.");
+            }
+
+            @Override
+            public void onError(int executionError) {
+                alertUser("Vehicle mode change failed: " + executionError);
+            }
+
+            @Override
+            public void onTimeout() {
+                alertUser("Vehicle mode change timed out.");
+            }
+        });
     }
 
     public void onArmButtonTap(View view) {
-        Button thisButton = (Button)view;
         State vehicleState = this.drone.getAttribute(AttributeType.STATE);
 
         if (vehicleState.isFlying()) {
             // Land
-            this.drone.changeVehicleMode(VehicleMode.COPTER_LAND);
+            VehicleApi.getApi(this.drone).setVehicleMode(VehicleMode.COPTER_LAND, new SimpleCommandListener() {
+                @Override
+                public void onError(int executionError) {
+                    alertUser("Unable to land the vehicle.");
+                }
+
+                @Override
+                public void onTimeout() {
+                    alertUser("Unable to land the vehicle.");
+                }
+            });
         } else if (vehicleState.isArmed()) {
             // Take off
-            this.drone.doGuidedTakeoff(10);
+            VehicleApi.getApi(this.drone).takeoff(10, new AbstractCommandListener() {
+
+                @Override
+                public void onSuccess() {
+                    alertUser("Taking off...");
+                }
+
+                @Override
+                public void onError(int i) {
+                    alertUser("Unable to take off.");
+                }
+
+                @Override
+                public void onTimeout() {
+                    alertUser("Unable to take off.");
+                }
+            });
         } else if (!vehicleState.isConnected()) {
             // Connect
             alertUser("Connect to a drone first");
         } else {
             // Connected but not Armed
-            this.drone.arm(true);
+            VehicleApi.getApi(this.drone).arm(true, false, new SimpleCommandListener() {
+                @Override
+                public void onError(int executionError) {
+                    alertUser("Unable to arm vehicle.");
+                }
+
+                @Override
+                public void onTimeout() {
+                    alertUser("Arming operation timed out.");
+                }
+            });
         }
     }
 
@@ -303,6 +362,7 @@ public class MainActivity extends ActionBarActivity implements DroneListener, To
 
     protected void alertUser(String message) {
         Toast.makeText(getApplicationContext(), message, Toast.LENGTH_LONG).show();
+        Log.d(TAG, message);
     }
 
     protected double distanceBetweenPoints(LatLongAlt pointA, LatLongAlt pointB) {
