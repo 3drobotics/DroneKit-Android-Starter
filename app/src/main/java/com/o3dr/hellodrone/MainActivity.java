@@ -54,7 +54,7 @@ public class MainActivity extends ActionBarActivity implements DroneListener, To
 
         final Context context = getApplicationContext();
         this.controlTower = new ControlTower(context);
-        this.drone = new Drone();
+        this.drone = new Drone(context);
 
         this.modeSelector = (Spinner)findViewById(R.id.modeSelect);
         this.modeSelector.setOnItemSelectedListener(new Spinner.OnItemSelectedListener() {
